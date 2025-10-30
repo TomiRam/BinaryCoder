@@ -1,59 +1,66 @@
 pipeline {
     agent any
 
+    environment {
+        // Update with your repo and Docker image name
+        REPO_URL = 'https://github.com/TomiRam/BinaryCoder.git'
+        IMAGE_NAME = 'binarycoder'
+    }
+
     stages {
+
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/TomiRam/BinaryCoder/tree/main'
+                echo 'Cloning GitHub repository...'
+                git branch: 'main', url: "${REPO_URL}"
             }
         }
 
-        stage('Python Lint & Test') {
+        stage('Build Python Script') {
             steps {
-                script {
-                    sh 'python3 -m pip install --upgrade pip'
-                    sh 'python3 -m pip install pylint pytest'
-                    sh 'pylint Binary.py || true'   // Linting (won't fail pipeline on warnings)
-                    sh 'pytest || true'            // If you have tests
+                echo 'Running Python syntax check...'
+                sh 'python3 -m py_compile Binary.py'
+            }
+        }
+
+        stage('Build C# Code') {
+            steps {
+                echo 'Building C# code...'
+                // If you have the .NET SDK installed on Jenkins:
+                sh 'dotnet new console -o tempapp'
+                sh 'mv BinaryCodedMessage.cs tempapp/Program.cs'
+                dir('tempapp') {
+                    sh 'dotnet build'
                 }
             }
         }
 
-        stage('Build C# Program') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'mcs BinaryCodedMessage.cs -out:BinaryCodedMessage.exe'
+                    echo 'Building Docker image...'
+                    sh 'docker build -t ${IMAGE_NAME}:latest -f BinaryDocker.dockerfile .'
                 }
             }
         }
 
-        stage('Run C# Program') {
+        stage('Test Docker Image') {
             steps {
-                script {
-                    sh 'mono BinaryCodedMessage.exe'
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                script {
-                    sh 'docker build -t binary-coder -f BinaryDocker.dockerfile .'
-                }
+                echo 'Running container test...'
+                sh 'docker run --rm ${IMAGE_NAME}:latest echo "Docker image built successfully!"'
             }
         }
     }
 
     post {
-        always {
-            echo 'Pipeline finished (success, failure, or aborted).'
-        }
         success {
-            echo 'Build completed successfully ✅'
+            echo '✅ Pipeline completed successfully.'
         }
         failure {
-            echo 'Build failed ❌'
+            echo '❌ Pipeline failed.'
+        }
+        always {
+            cleanWs()
         }
     }
 }
-
