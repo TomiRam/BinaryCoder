@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://your-repo-url.git'
+            }
+        }
+
+        stage('Python Lint & Test') {
+            steps {
+                script {
+                    sh 'python3 -m pip install --upgrade pip'
+                    sh 'python3 -m pip install pylint pytest'
+                    sh 'pylint Binary.py || true'   // Linting (won't fail pipeline on warnings)
+                    sh 'pytest || true'            // If you have tests
+                }
+            }
+        }
+
+        stage('Build C# Program') {
+            steps {
+                script {
+                    sh 'mcs BinaryCodedMessage.cs -out:BinaryCodedMessage.exe'
+                }
+            }
+        }
+
+        stage('Run C# Program') {
+            steps {
+                script {
+                    sh 'mono BinaryCodedMessage.exe'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                script {
+                    sh 'docker build -t binary-coder -f BinaryDocker.dockerfile .'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished (success, failure, or aborted).'
+        }
+        success {
+            echo 'Build completed successfully ✅'
+        }
+        failure {
+            echo 'Build failed ❌'
+        }
+    }
+}
